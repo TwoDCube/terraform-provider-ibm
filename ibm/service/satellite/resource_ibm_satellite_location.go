@@ -5,9 +5,11 @@ package satellite
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/IBM-Cloud/container-services-go-sdk/kubernetesserviceapiv1"
@@ -55,6 +57,7 @@ func ResourceIBMSatelliteLocation() *schema.Resource {
 				}
 
 				d.Set("zones", flex.NewStringSet(schema.HashString, instance.WorkerZones))
+				fmt.Fprintf(os.Stderr, "d.Get(): %v", d.Get("coreos_enabled"))
 				return []*schema.ResourceData{d}, nil
 			},
 		},
@@ -344,6 +347,17 @@ func resourceIBMSatelliteLocationRead(d *schema.ResourceData, meta interface{}) 
 			return nil
 		}
 		return err
+	}
+	ss, err := json.Marshal(response)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Fprintf(os.Stderr, "\n\n\n\ninstance: %v\n\n\n\n", string(ss))
+	if instance.CoreosEnabled == nil {
+		fmt.Fprintf(os.Stderr, "\n\n\n\ncoreos_enabled: %v\n\n\n\n", "nil")
+	} else {
+		fmt.Fprintf(os.Stderr, "\n\n\n\ncoreos_enabled: %v\n\n\n\n", strconv.FormatBool(*instance.CoreosEnabled))
 	}
 
 	d.Set(satLocation, *instance.Name)
