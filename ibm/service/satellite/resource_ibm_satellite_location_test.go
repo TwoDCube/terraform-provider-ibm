@@ -5,6 +5,7 @@ package satellite_test
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	acc "github.com/IBM-Cloud/terraform-provider-ibm/ibm/acctest"
@@ -17,6 +18,8 @@ import (
 )
 
 func TestAccSatelliteLocation_Basic(t *testing.T) {
+	t.Parallel()
+
 	var instance string
 	name := fmt.Sprintf("tf-satellitelocation-%d", acctest.RandIntRange(10, 100))
 	managed_from := "wdc04"
@@ -42,6 +45,8 @@ func TestAccSatelliteLocation_Basic(t *testing.T) {
 }
 
 func TestAccSatelliteLocation_Import(t *testing.T) {
+	t.Parallel()
+
 	var instance string
 	name := fmt.Sprintf("tf_location_%d", acctest.RandIntRange(10, 100))
 	managed_from := "wdc04"
@@ -71,6 +76,8 @@ func TestAccSatelliteLocation_Import(t *testing.T) {
 }
 
 func TestAccSatelliteLocation_PodAndServiceSubnet(t *testing.T) {
+	t.Parallel()
+
 	var instance string
 	name := fmt.Sprintf("tf-satellitelocation-%d", acctest.RandIntRange(10, 100))
 	managed_from := "wdc04"
@@ -145,8 +152,8 @@ func testAccCheckSatelliteLocationDestroy(s *terraform.State) error {
 			Controller: &ID,
 		}
 
-		_, _, err = satClient.GetSatelliteLocation(getSatLocOptions)
-		if err == nil {
+		resp, _, err := satClient.GetSatelliteLocation(getSatLocOptions)
+		if err == nil && !slices.Contains([]string{"deleted", "deleting", "delete_failed"}, *resp.State) {
 			return fmt.Errorf("Satellite Location still exists: %s", rs.Primary.ID)
 		}
 
