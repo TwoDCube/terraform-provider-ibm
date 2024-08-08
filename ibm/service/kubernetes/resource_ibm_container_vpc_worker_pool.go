@@ -290,8 +290,7 @@ func resourceIBMContainerVpcWorkerPoolCreate(d *schema.ResourceData, meta interf
 
 		d.SetId(fmt.Sprintf("%s/%s", clusterNameorID, wp.ID))
 
-		return resourceIBMContainerVpcWorkerPoolRead(d, meta)
-
+		return resourceIBMContainerVpcWorkerPoolUpdate(d, meta)
 	}
 
 	var zonei []interface{}
@@ -396,7 +395,7 @@ func resourceIBMContainerVpcWorkerPoolUpdate(d *schema.ResourceData, meta interf
 	clusterNameOrID := d.Get("cluster").(string)
 	workerPoolName := d.Get("worker_pool_name").(string)
 
-	if d.HasChange("labels") {
+	if d.HasChange("labels") || (d.IsNewResource() && d.Get("import_on_create").(bool)) {
 		clusterNameOrID := d.Get("cluster").(string)
 		workerPoolName := d.Get("worker_pool_name").(string)
 
@@ -423,7 +422,7 @@ func resourceIBMContainerVpcWorkerPoolUpdate(d *schema.ResourceData, meta interf
 		}
 	}
 
-	if d.HasChange("taints") {
+	if d.HasChange("taints") || (d.IsNewResource() && d.Get("import_on_create").(bool)) {
 		var taints []interface{}
 		if taintRes, ok := d.GetOk("taints"); ok {
 			taints = taintRes.(*schema.Set).List()
@@ -433,7 +432,7 @@ func resourceIBMContainerVpcWorkerPoolUpdate(d *schema.ResourceData, meta interf
 		}
 	}
 
-	if d.HasChange("worker_count") {
+	if d.HasChange("worker_count") || (d.IsNewResource() && d.Get("import_on_create").(bool)) {
 		clusterNameOrID := d.Get("cluster").(string)
 		workerPoolName := d.Get("worker_pool_name").(string)
 		count := d.Get("worker_count").(int)
@@ -453,7 +452,7 @@ func resourceIBMContainerVpcWorkerPoolUpdate(d *schema.ResourceData, meta interf
 		}
 	}
 
-	if d.HasChange("zones") {
+	if d.HasChange("zones") || (d.IsNewResource() && d.Get("import_on_create").(bool)) {
 		clusterID := d.Get("cluster").(string)
 		workerPoolName := d.Get("worker_pool_name").(string)
 		targetEnv, err := getVpcClusterTargetHeader(d, meta)
@@ -469,6 +468,34 @@ func resourceIBMContainerVpcWorkerPoolUpdate(d *schema.ResourceData, meta interf
 		}
 		os := oldList.(*schema.Set)
 		ns := newList.(*schema.Set)
+
+		if d.IsNewResource() && d.Get("import_on_create").(bool) {
+			os = schema.NewSet(os.F, nil)
+
+			wpClient, err := meta.(conns.ClientSession).VpcContainerAPI()
+			if err != nil {
+				return err
+			}
+			workerPoolsAPI := wpClient.WorkerPools()
+			targetEnv, err := getVpcClusterTargetHeader(d, meta)
+			if err != nil {
+				return err
+			}
+			workerPool, err := workerPoolsAPI.GetWorkerPool(clusterNameOrID, workerPoolName, targetEnv)
+			if err != nil {
+				return err
+			}
+			for _, zone := range workerPool.Zones {
+				for _, subnet := range zone.Subnets {
+					zoneInfo := map[string]interface{}{
+						"name":      zone.ID,
+						"subnet_id": subnet.ID,
+					}
+					os.Add(zoneInfo)
+				}
+			}
+		}
+
 		remove := os.Difference(ns).List()
 		add := ns.Difference(os).List()
 		if len(add) > 0 {
