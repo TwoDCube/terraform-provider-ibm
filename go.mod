@@ -247,4 +247,4 @@ exclude (
 	k8s.io/client-go v12.0.0+incompatible
 )
 
-replace github.com/IBM-Cloud/container-services-go-sdk => ../container-services-go-sdk
+replace github.com/IBM-Cloud/container-services-go-sdk => github.com/TwoDCube/container-services-go-sdk v0.0.0-20240815093224-8b65fde1fd2b
