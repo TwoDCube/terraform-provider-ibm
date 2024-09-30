@@ -22,6 +22,7 @@ import (
 	"github.com/IBM-Cloud/bluemix-go/bmxerror"
 	"github.com/IBM-Cloud/terraform-provider-ibm/ibm/conns"
 	"github.com/IBM-Cloud/terraform-provider-ibm/ibm/flex"
+	"github.com/IBM-Cloud/terraform-provider-ibm/ibm/service/kubernetes/utils/workers"
 	"github.com/IBM-Cloud/terraform-provider-ibm/ibm/validate"
 )
 
@@ -163,7 +164,7 @@ func ResourceIBMContainerVpcCluster() *schema.Resource {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Default:     false,
-				Description: "Updates all the woker nodes if sets to true",
+				Description: "Updates all the worker nodes if sets to true",
 			},
 
 			"patch_version": {
@@ -764,7 +765,6 @@ func resourceIBMContainerVpcClusterUpdate(d *schema.ResourceData, meta interface
 	}
 
 	if (d.HasChange("kube_version") || d.HasChange("update_all_workers") || d.HasChange("patch_version") || d.HasChange("retry_patch_version")) && !d.IsNewResource() {
-
 		if d.HasChange("kube_version") {
 			ClusterClient, err := meta.(conns.ClientSession).ContainerAPI()
 			if err != nil {
@@ -795,88 +795,9 @@ func resourceIBMContainerVpcClusterUpdate(d *schema.ResourceData, meta interface
 			}
 		}
 
-		csClient, err := meta.(conns.ClientSession).VpcContainerAPI()
-		if err != nil {
-			return err
-		}
-		targetEnv, err := getVpcClusterTargetHeader(d)
-		if err != nil {
-			return err
-		}
-
 		clusterID := d.Id()
-
-		// Update the worker nodes after master node kube-version is updated.
-		// workers will store the existing workers info to identify the replaced node
-		workersInfo := make(map[string]int)
-
-		updateAllWorkers := d.Get("update_all_workers").(bool)
-		if updateAllWorkers || d.HasChange("patch_version") || d.HasChange("retry_patch_version") {
-
-			// patchVersion := d.Get("patch_version").(string)
-			workers, err := csClient.Workers().ListWorkers(clusterID, false, targetEnv)
-			if err != nil {
-				d.Set("patch_version", nil)
-				return fmt.Errorf("[ERROR] Error retrieving workers for cluster: %s", err)
-			}
-
-			for index, worker := range workers {
-				workersInfo[worker.ID] = index
-			}
-			workersCount := len(workers)
-
-			waitForWorkerUpdate := d.Get("wait_for_worker_update").(bool)
-
-			for _, worker := range workers {
-				workerPool, err := csClient.WorkerPools().GetWorkerPool(clusterID, worker.PoolID, targetEnv)
-				if err != nil {
-					return fmt.Errorf("[ERROR] Error retrieving worker pool: %s", err)
-				}
-
-				// check if change is present in MAJOR.MINOR version or in PATCH version
-				if worker.KubeVersion.Actual != worker.KubeVersion.Target || worker.LifeCycle.ActualOperatingSystem != workerPool.OperatingSystem {
-					_, err := csClient.Workers().ReplaceWokerNode(clusterID, worker.ID, targetEnv)
-					// As API returns http response 204 NO CONTENT, error raised will be exempted.
-					if err != nil && !strings.Contains(err.Error(), "EmptyResponseBody") {
-						d.Set("patch_version", nil)
-						return fmt.Errorf("[ERROR] Error replacing the worker node from the cluster: %s", err)
-					}
-
-					if waitForWorkerUpdate {
-						//1. wait for worker node to delete
-						_, deleteError := waitForWorkerNodetoDelete(d, meta, targetEnv, worker.ID)
-						if deleteError != nil {
-							d.Set("patch_version", nil)
-							return fmt.Errorf("[ERROR] Worker node - %s is failed to replace", worker.ID)
-						}
-
-						//2. wait for new workerNode
-						_, newWorkerError := waitForNewWorker(d, meta, targetEnv, workersCount)
-						if newWorkerError != nil {
-							d.Set("patch_version", nil)
-							return fmt.Errorf("[ERROR] Failed to spawn new worker node")
-						}
-
-						//3. Get new worker node ID and update the map
-						newWorkerID, index, newNodeError := getNewWorkerID(d, meta, targetEnv, workersInfo)
-						if newNodeError != nil {
-							d.Set("patch_version", nil)
-							return fmt.Errorf("[ERROR] Unable to find the new worker node info")
-						}
-
-						delete(workersInfo, worker.ID)
-						workersInfo[newWorkerID] = index
-
-						//4. wait for the worker's version update and normal state
-						_, Err := waitForVpcClusterWokersVersionUpdate(d, meta, targetEnv, newWorkerID)
-						if Err != nil {
-							d.Set("patch_version", nil)
-							return fmt.Errorf(
-								"[ERROR] Error waiting for cluster (%s) worker nodes kube version to be updated: %s", d.Id(), Err)
-						}
-					}
-				}
-			}
+		if err := workers.UpdateVPCWorkers(d, meta, clusterID, ""); err != nil {
+			return err
 		}
 	}
 

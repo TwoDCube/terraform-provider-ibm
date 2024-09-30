@@ -17,6 +17,7 @@ import (
 	"github.com/IBM-Cloud/bluemix-go/bmxerror"
 	"github.com/IBM-Cloud/terraform-provider-ibm/ibm/conns"
 	"github.com/IBM-Cloud/terraform-provider-ibm/ibm/flex"
+	"github.com/IBM-Cloud/terraform-provider-ibm/ibm/service/kubernetes/utils/workers"
 	"github.com/IBM-Cloud/terraform-provider-ibm/ibm/validate"
 )
 
@@ -227,6 +228,30 @@ func ResourceIBMContainerVpcWorkerPool() *schema.Resource {
 				Elem:             &schema.Schema{Type: schema.TypeString},
 				Set:              flex.ResourceIBMVPCHash,
 				DiffSuppressFunc: flex.ApplyOnce,
+			},
+			"update_all_workers": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: "Updates all the worker nodes in the worker pool if sets to true",
+			},
+			"patch_version": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Kubernetes patch version",
+			},
+
+			"retry_patch_version": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Description: "Argument which helps to retry the patch version updates on worker nodes. Increment the value to retry the patch updates if the previous apply fails",
+			},
+
+			"wait_for_worker_update": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     true,
+				Description: "Wait for worker node to update during kube version update.",
 			},
 		},
 	}
@@ -514,6 +539,7 @@ func resourceIBMContainerVpcWorkerPoolUpdate(d *schema.ResourceData, meta interf
 		}
 	}
 
+	// Note the order of operations here. The `operating_system` has to be updated BEFORE doing the update on the workers
 	if d.HasChange("operating_system") {
 		clusterNameOrID := d.Get("cluster").(string)
 		workerPoolName := d.Get("worker_pool_name").(string)
@@ -535,6 +561,16 @@ func resourceIBMContainerVpcWorkerPoolUpdate(d *schema.ResourceData, meta interf
 		}, Env)
 		if err != nil {
 			return fmt.Errorf("[ERROR] Error updating the operating_system %s: %s", operatingSystem, err)
+		}
+	}
+
+	if (d.Get("update_all_workers").(bool) && d.HasChange("operating_system") ||
+		d.HasChange("update_all_workers") ||
+		d.HasChange("patch_version") ||
+		d.HasChange("retry_patch_version")) && !d.IsNewResource() {
+
+		if err := workers.UpdateVPCWorkers(d, meta, clusterNameOrID, workerPoolName); err != nil {
+			return err
 		}
 	}
 

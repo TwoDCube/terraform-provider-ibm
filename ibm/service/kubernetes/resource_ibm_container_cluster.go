@@ -247,7 +247,7 @@ func ResourceIBMContainerCluster() *schema.Resource {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Default:     false,
-				Description: "Updates all the woker nodes if sets to true",
+				Description: "Updates all the worker nodes if sets to true",
 			},
 
 			"machine_type": {
