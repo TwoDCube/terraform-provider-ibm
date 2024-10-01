@@ -475,6 +475,8 @@ func resourceIBMContainerVpcWorkerPoolUpdate(d *schema.ResourceData, meta interf
 		if err != nil {
 			return fmt.Errorf("[ERROR] Error updating the worker_count %d: %s", count, err)
 		}
+
+		// TODO: WAIT FOR RESIZE TO COMPLETE
 	}
 
 	if d.HasChange("zones") {
@@ -537,6 +539,8 @@ func resourceIBMContainerVpcWorkerPoolUpdate(d *schema.ResourceData, meta interf
 				}
 			}
 		}
+
+		// TODO: WAIT FOR ZONE ADD/DELETE TO COMPLETE
 	}
 
 	// Note the order of operations here. The `operating_system` has to be updated BEFORE doing the update on the workers

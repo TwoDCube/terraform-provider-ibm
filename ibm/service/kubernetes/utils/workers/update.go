@@ -43,9 +43,6 @@ func UpdateVPCWorkers(d *schema.ResourceData, meta interface{}, clusterID string
 			return fmt.Errorf("[ERROR] Error retrieving workers for cluster: %s", err)
 		}
 
-		// TODO: debug
-		log.Printf("[INFO] Listing worker by worker pool: wp:%s workers:%#v\n", targetWorkerPoolID, workers)
-
 		for index, worker := range workers {
 			workersInfo[worker.ID] = index
 		}
@@ -59,9 +56,6 @@ func UpdateVPCWorkers(d *schema.ResourceData, meta interface{}, clusterID string
 				return fmt.Errorf("[ERROR] Error retrieving worker pool: %s", err)
 			}
 
-			// TODO: debug
-			log.Printf("[INFO] Get workerpool: wp:%#v", workerPool)
-
 			// check if change is present in MAJOR.MINOR version or in PATCH version
 			if worker.KubeVersion.Actual != worker.KubeVersion.Target || worker.LifeCycle.ActualOperatingSystem != workerPool.OperatingSystem {
 				_, err := csClient.Workers().ReplaceWokerNode(clusterID, worker.ID, targetEnv)
@@ -70,9 +64,6 @@ func UpdateVPCWorkers(d *schema.ResourceData, meta interface{}, clusterID string
 					d.Set("patch_version", nil)
 					return fmt.Errorf("[ERROR] Error replacing the worker node from the cluster: %s", err)
 				}
-
-				// TODO: debug
-				log.Printf("[INFO] Replaced: w:%#v", worker.ID)
 
 				if waitForWorkerUpdate {
 					//1. wait for worker node to delete
@@ -138,13 +129,8 @@ func waitForWorkerNodetoDelete(d *schema.ResourceData, meta interface{}, targetE
 		Refresh: func() (interface{}, string, error) {
 			worker, err := csClient.Workers().Get(clusterID, workerID, targetEnv)
 			if err != nil {
-				// TODO: debug
-				log.Printf("[ERROR] Failed to get: e:%#v", err)
 				return worker, workerDeletePending, nil
 			}
-
-			// TODO: debug
-			log.Printf("[INFO] Polling for delete: w:%#v", worker.LifeCycle.ActualState)
 
 			if worker.LifeCycle.ActualState == "deleted" {
 				return worker, workerDeleteState, nil
@@ -173,8 +159,6 @@ func waitForNewWorker(d *schema.ResourceData, meta interface{}, targetEnv v2.Clu
 			if err != nil {
 				return workers, "", fmt.Errorf("[ERROR] Error in retriving the list of worker nodes")
 			}
-			// TODO: debug
-			log.Printf("[INFO] Polling for new worker: actual:%#v desired:%#v", len(workers), workersCount)
 			if len(workers) == workersCount {
 				return workers, "created", nil
 			}
@@ -202,9 +186,6 @@ func getNewWorkerID(d *schema.ResourceData, meta interface{}, targetEnv v2.Clust
 	for index, worker := range workers {
 		if _, ok := workersInfo[worker.ID]; !ok {
 			log.Println("[DEBUG] found new replaced node: ", worker.ID)
-
-			// TODO: debug
-			log.Printf("[INFO] found new replaced node: w:%#v", worker.ID)
 			return worker.ID, index, nil
 		}
 	}
@@ -238,9 +219,6 @@ func vpcClusterWorkersVersionRefreshFunc(client v2.Workers, workerID, clusterID 
 		if err != nil {
 			return nil, "retry", fmt.Errorf("[ERROR] Error retrieving worker of container vpc cluster: %s", err)
 		}
-
-		// TODO: debug
-		log.Printf("[INFO] polling for health state: w:%#v", worker.Health.State)
 
 		// Check active updates
 		if worker.Health.State == "normal" {
